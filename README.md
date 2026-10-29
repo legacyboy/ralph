@@ -2,7 +2,7 @@
 
 ![Ralph](ralph.webp)
 
-Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com) or [Claude Code](https://docs.anthropic.com/en/docs/claude-code)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
+Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [opencode](https://opencode.ai)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
 
 Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
@@ -13,6 +13,7 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 - One of the following AI coding tools installed and authenticated:
   - [Amp CLI](https://ampcode.com) (default)
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
+  - [opencode](https://opencode.ai) (`npm install -g opencode-ai`) — see [Using opencode](#using-opencode)
 - `jq` installed (`brew install jq` on macOS)
 - A git repository for your project
 
@@ -115,9 +116,38 @@ This creates `prd.json` with user stories structured for autonomous execution.
 
 # Using Claude Code
 ./scripts/ralph/ralph.sh --tool claude [max_iterations]
+
+# Using opencode
+./scripts/ralph/ralph.sh --tool opencode [max_iterations]
 ```
 
-Default is 10 iterations. Use `--tool amp` or `--tool claude` to select your AI coding tool.
+Default is 10 iterations. Use `--tool amp`, `--tool claude` or `--tool opencode` to select your AI coding tool.
+
+## Using opencode
+
+opencode runs headless via `opencode run --auto -m <model> "<prompt>"` and reads its prompt from
+`scripts/ralph/OPENCODE.md` (an AGENTS.md-flavoured copy of `CLAUDE.md`).
+
+Configure the model in your opencode config (`~/.config/opencode/opencode.jsonc`) for any
+OpenAI-compatible provider, then pick it per run:
+
+```bash
+# default: ollama/deepseek-v4.1-flash:cloud
+./scripts/ralph/ralph.sh --tool opencode 10
+
+# override the model
+RALPH_MODEL=ollama/qwen3-coder-next:cloud ./scripts/ralph/ralph.sh --tool opencode 10
+
+# override the project root (defaults to the parent of scripts/ralph/)
+RALPH_DIR=/path/to/repo ./scripts/ralph/ralph.sh --tool opencode 10
+```
+
+Notes for opencode users:
+- `--auto` auto-approves permissions that are not explicitly denied. Keep opencode's `permission`
+  config restrictive if you are running this against an unfamiliar repo.
+- opencode bills per token against whatever provider you configured, so a cheap/fast model is a
+  good default for stories that already have tight acceptance criteria.
+- If opencode exits non-zero the loop keeps going (same as the other tools); check `progress.txt`.
 
 Ralph will:
 1. Create a feature branch (from PRD `branchName`)
@@ -133,9 +163,10 @@ Ralph will:
 
 | File | Purpose |
 |------|---------|
-| `ralph.sh` | The bash loop that spawns fresh AI instances (supports `--tool amp` or `--tool claude`) |
+| `ralph.sh` | The bash loop that spawns fresh AI instances (supports `--tool amp`, `--tool claude`, `--tool opencode`) |
 | `prompt.md` | Prompt template for Amp |
 | `CLAUDE.md` | Prompt template for Claude Code |
+| `OPENCODE.md` | Prompt template for opencode (AGENTS.md-style) |
 | `prd.json` | User stories with `passes` status (the task list) |
 | `prd.json.example` | Example PRD format for reference |
 | `progress.txt` | Append-only learnings for future iterations |
@@ -162,7 +193,7 @@ npm run dev
 
 ### Each Iteration = Fresh Context
 
-Each iteration spawns a **new AI instance** (Amp or Claude Code) with clean context. The only memory between iterations is:
+Each iteration spawns a **new AI instance** (Amp, Claude Code or opencode) with clean context. The only memory between iterations is:
 - Git history (commits from previous iterations)
 - `progress.txt` (learnings and context)
 - `prd.json` (which stories are done)

@@ -11,3 +11,5 @@ progress.txt
 
 #Claude
 .claude/
+__pycache__/
+.ralph-notes/

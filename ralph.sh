@@ -1,6 +1,10 @@
 #!/bin/bash
 # Ralph Wiggum - Long-running AI agent loop
-# Usage: ./ralph.sh [--tool amp|claude] [max_iterations]
+# Usage: ./ralph.sh [--tool amp|claude|opencode] [max_iterations]
+#
+# opencode notes:
+#   RALPH_MODEL=<provider/model>  model to use (default: ollama/deepseek-v4.1-flash:cloud)
+#   RALPH_DIR=<path>              project root (default: parent of scripts/ralph/)
 
 set -e
 
@@ -29,11 +33,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate tool choice
-if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
-  echo "Error: Invalid tool '$TOOL'. Must be 'amp' or 'claude'."
+if [[ "$TOOL" != "amp" && "$TOOL" != "claude" && "$TOOL" != "opencode" ]]; then
+  echo "Error: Invalid tool '$TOOL'. Must be 'amp', 'claude' or 'opencode'."
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${RALPH_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+RALPH_MODEL="${RALPH_MODEL:-ollama/deepseek-v4.1-flash:cloud}"
 PRD_FILE="$SCRIPT_DIR/prd.json"
 PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
@@ -79,7 +85,7 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-echo "Starting Ralph - Tool: $TOOL - Max iterations: $MAX_ITERATIONS"
+echo "Starting Ralph - Tool: $TOOL - Max iterations: $MAX_ITERATIONS - Dir: $PROJECT_DIR"
 
 for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
@@ -90,9 +96,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   # Run the selected tool with the ralph prompt
   if [[ "$TOOL" == "amp" ]]; then
     OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
-  else
+  elif [[ "$TOOL" == "claude" ]]; then
     # Claude Code: use --dangerously-skip-permissions for autonomous operation, --print for output
     OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || true
+  else
+    # opencode: --auto auto-approves permissions not explicitly denied; prompt passed as message
+    PROMPT_FILE="$SCRIPT_DIR/prompt.md"
+    [ -f "$SCRIPT_DIR/OPENCODE.md" ] && PROMPT_FILE="$SCRIPT_DIR/OPENCODE.md"
+    OUTPUT=$(opencode run --dir "$PROJECT_DIR" --auto -m "$RALPH_MODEL" "$(cat "$PROMPT_FILE")" 2>&1 | tee /dev/stderr) || true
   fi
   
   # Check for completion signal
